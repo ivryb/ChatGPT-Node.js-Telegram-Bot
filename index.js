@@ -112,6 +112,10 @@ bot.command('confirm', async (ctx) => {
     
     const paidDate = new Date(user.paidUntilDate);
     const dateString = paidDate.toLocaleDateString('en-GB');
+
+    if (ctx.session.userId === subscriberId) {
+      ctx.session.paidUntilDate = user.paidUntilDate;
+    }
       
     await ctx.reply(`Subscription enabled successfuly, last date: ${dateString}`);
 
@@ -156,7 +160,7 @@ bot.on('message', async (ctx) => {
 
   console.log('Start message processing', user.id);
 
-  console.log('ctx session', ctx.session);
+  console.log('Session', ctx.session);
 
   if (!canMakeRequest(ctx)) {
     await sendTrialEndedMessage(ctx);

@@ -1,14 +1,12 @@
 import { session } from 'grammy';
 
-import Client from '@replit/database';
-import fs from 'fs';
+import { RedisAdapter } from '@grammyjs/storage-redis';
+import IORedis from 'ioredis';
 
-const { allowedUsersIdsString, adminIdString } = process.env;
+const { allowedUsersIdsString, adminIdString, redisURL } = process.env;
 
 const allowedUsersIds = allowedUsersIdsString.split(',').map(Number);
 export const adminId = Number(adminIdString);
-
-const db = new Client();
 
 const getInitialSessionData = () => ({
   userId: null,
@@ -27,53 +25,27 @@ export const getPrettyUserId = (user) => {
   return [username || userId, firstName, lastName].filter(Boolean).join(' ');
 }
 
-const sessionStorageAdapter = {
-  async read(key) {
-    const value = await db.get(key);
-
-    return value || getInitialSessionData();
-  },
-  
-  async write(key, value) {
-    console.log('Write DB value', key, value);
-    
-    try {
-      await db.set(key, value);
-    } catch (error) {
-      console.log('Write DB Error', error);
-    }
-  },
-  
-  async delete(key) {
-    await db.delete(key);
-  },
-  
-  async readAllKeys() {
-    const list = await db.list();
-
-    return list;
-  }
-};
-
-const exportDb = async () => {
-  const data = await db.getAll();
-  
-  try {
-    fs.writeFileSync('db.json', JSON.stringify(data))
-  } catch (err) {
-    console.error(err)
-  }
-};
-
-// exportDb();
-
 export const getSessionKey = (ctx) => {
   return ctx.chat?.id.toString();
 }
 
+const redis = new IORedis(redisURL);
+
+const storage = new RedisAdapter({ instance: redis });
+
+const getUser = async (userId) => {
+  const data = await redis.get(userId);
+
+  return JSON.parse(data);
+};
+
+const updateUser = async (userId, data) => {
+  await redis.set(userId, JSON.stringify(data));
+};
+
 export const botSession = session({
   initial: getInitialSessionData,
-  storage: sessionStorageAdapter,
+  storage,
   getSessionKey
 });
 
@@ -132,7 +104,7 @@ export const removeFreeRequest = (ctx) => {
 }
 
 export const enableUserSubscription = async (userId, months) => {
-  const user = await db.get(userId);
+  const user = await getUser(userId);
 
   const now = Date.now();
     
@@ -140,7 +112,7 @@ export const enableUserSubscription = async (userId, months) => {
 
   user.paidUntilDate = now + subscriptionPeriod;
 
-  await db.set(userId, user);
+  await updateUser(userId, user);
 
   return user;
 }

@@ -160,8 +160,6 @@ bot.on('message', async (ctx) => {
 
   console.log('Start message processing', user.id);
 
-  console.log('Session', ctx.session);
-
   if (!canMakeRequest(ctx)) {
     await sendTrialEndedMessage(ctx);
   } else {

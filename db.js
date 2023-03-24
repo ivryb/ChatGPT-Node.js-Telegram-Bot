@@ -108,7 +108,7 @@ export const enableUserSubscription = async (userId, months) => {
 
   const now = Date.now();
     
-  const subscriptionPeriod = 1000 * 60 * 60 * 24 * 30 * months;
+  const subscriptionPeriod = 1000 * 60 * 60 * 24 * 31 * months;
 
   user.paidUntilDate = now + subscriptionPeriod;
 

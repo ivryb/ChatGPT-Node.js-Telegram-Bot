@@ -84,9 +84,9 @@ export const hasPaidRequests = (ctx) => {
 }
 
 export const canMakeRequest = (ctx) => {
-  if (isAdmin(ctx)) {
-    return false;
-  }
+  // if (isAdmin(ctx)) {
+  //   return false;
+  // }
   
   return isAllowedUser(ctx) || hasFreeRequests(ctx) || hasPaidRequests(ctx);
 }

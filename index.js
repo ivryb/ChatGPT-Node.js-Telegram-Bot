@@ -1,6 +1,7 @@
 import { Bot, InlineKeyboard } from 'grammy';
 import { run, sequentialize } from '@grammyjs/runner';
 import { hydrateReply, parseMode } from '@grammyjs/parse-mode';
+import { I18n } from '@grammyjs/i18n';
 
 import Amplitude from 'amplitude';
 

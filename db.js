@@ -17,6 +17,8 @@ const getInitialSessionData = () => ({
   
   paidUntilDate: null,
   freeRequestsLeft: 10,
+
+  locale: null
 });
 
 export const getPrettyUserId = (user) => {
@@ -82,15 +84,19 @@ export const hasPaidRequests = (ctx) => {
 }
 
 export const canMakeRequest = (ctx) => {
-  // if (isAdmin(ctx)) {
-  //   return false;
-  // }
+  if (isAdmin(ctx)) {
+    return false;
+  }
   
   return isAllowedUser(ctx) || hasFreeRequests(ctx) || hasPaidRequests(ctx);
 }
 
 export const isFreeUser = (ctx) => {
   return !isAllowedUser(ctx) && !hasPaidRequests(ctx);
+}
+
+export const hasLocale = (ctx) => {
+  return Boolean(ctx.session.locale);
 }
 
 export const removeFreeRequest = (ctx) => {

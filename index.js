@@ -16,6 +16,7 @@ import {
   canMakeRequest,
   isFreeUser,
   isAdmin,
+  hasLocale,
   removeFreeRequest,
   enableUserSubscription,
   adminId,
@@ -30,18 +31,21 @@ const configuration = new Configuration({
 
 const openai = new OpenAIApi(configuration);
 
+const i18n = new I18n({
+  directory: 'locales',
+
+  defaultLocale: 'uk',
+
+  localeNegotiator: (ctx) => ctx.session.locale ?? 'uk',
+});
+
 const bot = new Bot(chatBotToken);
 
 bot.use(hydrateReply);
 
 bot.use(sequentialize(getSessionKey))
 bot.use(botSession);
-
-// await bot.api.setMyCommands([
-//   { command: "start", description: "Start the bot" },
-//   { command: "help", description: "Show help text" },
-//   { command: "settings", description: "Open settings" },
-// ]);
+bot.use(i18n);
 
 const monthPrice = 50;
 const sixMonthsPrice = 200;
@@ -73,17 +77,73 @@ const listLastActiveUsers = () => {
     .join('');
 }
 
+const setBotCommands = async (ctx) => {
+  await bot.api.setMyCommands([
+    { command: 'start', description: 'Start the bot' },
+    // { command: 'help', description: "Show help text" },
+    // { command: "settings", description: "Open settings" },
+    { command: 'examples', description: 'Examples of using ChatGPT' },
+    { command: 'language', description: 'Language selection' },
+  ]);
+
+  await bot.api.setMyCommands([
+    { command: 'start', description: 'Запустити бота' },
+    // { command: 'help', description: "Show help text" },
+    // { command: "settings", description: "Open settings" },
+    { command: 'examples', description: 'Приклади використання ChatGPT' },
+    { command: 'language', description: 'Змінити мову' },
+  ], { language_code: 'uk' });
+
+  await bot.api.setChatMenuButton({ type: 'commands' });
+};
+
+setBotCommands();
+
+const sendStartMessages = async (ctx) => {
+  await ctx.replyWithHTML(ctx.t('start'));
+  await ctx.replyWithHTML(ctx.t('start-try'));
+}
+
+const sendSelectLanguageMessage = async (ctx, destination) => {
+  await ctx.replyWithHTML('Select a language', {
+    reply_markup: new InlineKeyboard()
+      .text('English', `${destination}_en`).row()
+      .text('Українська', `${destination}_uk`).row()
+  });
+};
+
+const selectLocale = (locale, isStart) => async (ctx) => {
+  ctx.session.locale = locale;
+  
+  await ctx.i18n.renegotiateLocale();
+
+  if (isStart) {
+    await sendStartMessages(ctx);
+  } else {
+    await ctx.replyWithHTML(ctx.t('language-changed'));
+  }
+
+  await ctx.answerCallbackQuery();
+
+  amp.track({
+    eventType: 'SelectLanguage',
+    userId: ctx.session.userId,
+    userProperties: ctx.session,
+    eventProperties: { locale }
+  });
+};
+
 bot.command('start', async (ctx) => {
   saveUser(ctx, ctx.msg.from);
   
   saveActiveUser(ctx.session);
+
+  if (hasLocale(ctx)) {
+    await sendStartMessages(ctx);
+  } else {
+    await sendSelectLanguageMessage(ctx, 'start');
+  }
   
-  await ctx.replyWithHTML('Привіт! Цей бот дозволяє швидко та зручно використовувати ChatGPT, без необхідності щоразу відкривати незручний сайт.\n\nChatGPT — це модель штучного інтелекту від OpenAI, яка може відповідати на запитання та виконувати різноманітні завдання через чат-інтерфейс. Вона навчена на надзвичайно великому обсязі текстової інформації та гарно розуміє сенс слів.\n\nChatGPT краще працює з англійською, але також підтримує інші мови, в тому числі українську. Вам не потрібно нічого налаштовувати, просто пишіть свої запити тією мовою, якою забажаєте.\n\n<b>Ми не зберігаємо історію вашого листування з ботом.</b> Через це модель не пам’ятає ваші попередні запити і генерує кожну відповідь з нуля. Щоб отримати найкращий результат, розписуйте свої запити якомога детальніше і не бійтеся експериментувати)');
-  // Hi! This is a simple ChatGPT Telegram bot. It allows you to use ChatGPT via OpenAI API, without having to go to their website.\n\nChatGPT works better with English language, but supports other languages too. You don\'t need to configure anything, just write your requests in any language you want.\n\n<b>We do not save the history of your correspondence with the bot.</b> Each new message generates a new response from scratch. Therefore, try to describe your request in as much detail as possible.
-
-  await ctx.replyWithHTML('А тепер спробуйте самі! Просто напишіть в чат будь-який запит, і штучний інтелект згенерує для вас відповідь)\n\nТакож ви можете скористатись командою /examples щоб побачити приклади.');
-  // Go on, try it yourself! Just write any question and ChatGPT will generate a response for you)
-
   amp.track({
     eventType: 'Start',
     userId: ctx.session.userId,
@@ -91,8 +151,25 @@ bot.command('start', async (ctx) => {
   });
 });
 
+bot.command('language', async (ctx) => {
+  sendSelectLanguageMessage(ctx, 'language');
+
+  saveActiveUser(ctx.session);
+  
+  amp.track({
+    eventType: 'LanguageCommand',
+    userId: ctx.session.userId,
+    userProperties: ctx.session
+  });
+});
+
+bot.callbackQuery('language_en', selectLocale('en'));
+bot.callbackQuery('language_uk', selectLocale('uk'));
+bot.callbackQuery('start_en', selectLocale('en', true));
+bot.callbackQuery('start_uk', selectLocale('uk', true));
+
 bot.command('examples', async (ctx) => {
-  await ctx.replyWithHTML('<b>Ось декілька прикладів використання ChatGPT</b>\n\n<i>Поясни *(будь-яку-тему)* простими словами.</i>\n\n<i>Ти — професійний письменник. Перепиши цей текст в стилі художнього роману, не змінюючи його сенсу: …</i>\n\n<i>Напиши 10 найцікавіших фактів з біографіі Черчілля.</i>\n\n<i>З якими проблемами найчастіше зіштовхуються люди, що вивчають програмування?</i>\n\n<i>Допоможи мені написати листа з проханням взяти вихідний на роботі, по причині…</i>\n\n<i>Ти — аналітик даних, що спеціалізується на стартапах в сфері освіти. Напиши 10 ідей для прибуткового edtech-стартапу, на базі ринкових даних.</i>\n\n<i>Напиши код простого Telegram-бота на мові JavaScript.</i>');
+  await ctx.replyWithHTML(ctx.t('examples'));
 
   saveActiveUser(ctx.session);
   
@@ -120,7 +197,9 @@ bot.command('confirm', async (ctx) => {
       
     await ctx.reply(`Subscription enabled successfuly, last date: ${dateString}`);
 
-    await bot.api.sendMessage(subscriberId, `Дякуємо за оплату! Вашу підписку успішно активовано, тепер ви можете вільно користуватися ботом) Підписка дійсна до ${dateString}`);
+    const userMessage = i18n.t(user.locale ?? 'uk', 'you-are-subscribed', { dateString });
+
+    await bot.api.sendMessage(subscriberId, userMessage);
 
     amp.track({
       eventType: 'Subscribed',
@@ -140,11 +219,15 @@ bot.command('status', async (ctx) => {
 });
 
 const sendTrialEndedMessage = async (ctx) => {
-  await ctx.replyWithHTML(`Використання OpenAI API, завдяки якому цей бот функціонує, нажаль, не безкоштовне. Втім, завдяки цьому бот генерує відповіді значно швидше, ніж безкоштовний сайт, і вам <b>не треба</b> купляти офіційну підписку OpenAI вартістю <b>$20/місяць</b>.\n\nМи надали вам 10 безкоштовних запитів. Щоб і далі користуватись ботом, ви можете придбати недорогу підписку вартістю <b>${monthPrice} грн/місяць</b> або <b>${sixMonthsPrice} грн/6 місяців</b>, щоб ми мали змогу і далі оплачувати API.`, {
-    reply_markup: new InlineKeyboard()
-      .text('Придбати підписку', 'paymentInstructions')
+  const msg = ctx.t('trial-ended', {
+    monthPrice,
+    sixMonthsPrice
   });
-  // You are not allowed to use this bot.\n\nIf you want to start using ChatGPT via Telegram, please contact @ivryb
+  
+  await ctx.replyWithHTML(msg, {
+    reply_markup: new InlineKeyboard()
+      .text(ctx.t('subscribe'), 'paymentInstructions')
+  });
 
   amp.track({
     eventType: 'FreeRequestsEnded',
@@ -164,8 +247,7 @@ bot.on('message', async (ctx) => {
   if (!canMakeRequest(ctx)) {
     await sendTrialEndedMessage(ctx);
   } else {
-    const fastReply = await ctx.reply('Генерую відповідь...');
-    // Generating a response...
+    const fastReply = await ctx.reply(ctx.t('generating-response'));
     
     try {
       const { data } = await openai.createChatCompletion({
@@ -204,8 +286,7 @@ bot.on('message', async (ctx) => {
         console.log(error.message);
       }
 
-      await ctx.reply('Вибачте, при генерації вашого запиту трапилася помилка( Будь ласка, зверніться до @ivryb');
-      // Sorry, an error occurred while generating your request( Please contact
+      await ctx.reply(ctx.t('request-error'));
 
       amp.track({
         eventType: 'RequestError',
@@ -221,9 +302,15 @@ bot.on('message', async (ctx) => {
 });
 
 bot.callbackQuery('paymentInstructions', async (ctx) => {
-  await ctx.replyWithHTML(`1. Перейдіть за посиланням для оплати: ${payLinkAny}\nПерекажіть ${monthPrice} грн. для підписки на 1 місяць, або ${sixMonthsPrice} грн. для підписки на півроку.\n\n2. Тицніть по кнопці знизу щоб повідомити нас про успішну оплату та продовжити користуватись ботом)\n\nДякуємо що залишаєтесь з нами 🙏🏻`, {
+  const msg = ctx.t('payment-instructions', {
+    payLink: payLinkAny,
+    monthPrice,
+    sixMonthsPrice
+  });
+  
+  await ctx.replyWithHTML(msg, {
     disable_web_page_preview: true,
-    reply_markup: new InlineKeyboard().text('Я оплатив', 'paymentCheck')
+    reply_markup: new InlineKeyboard().text(ctx.t('i-paid'), 'paymentCheck')
   });
 
   await ctx.answerCallbackQuery();
@@ -235,11 +322,11 @@ bot.callbackQuery('paymentInstructions', async (ctx) => {
 });
 
 bot.callbackQuery('paymentCheck', async (ctx) => {
-  await ctx.replyWithHTML('Дякуємо! Скоро ми перевіримо статус оплати та повідомимо вас про активацію підписки 😇');
+  await ctx.replyWithHTML(ctx.t('checking-payment'));
   
   await ctx.answerCallbackQuery();
 
-  await bot.api.sendMessage(adminId, `User payment reported`);
+  await bot.api.sendMessage(adminId, `User payment reported: ${getPrettyUserId(ctx.session)}`);
   await bot.api.sendMessage(adminId, ctx.session.userId);
 
   amp.track({

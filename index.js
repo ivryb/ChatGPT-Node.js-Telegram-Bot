@@ -113,6 +113,10 @@ bot.command('confirm', async (ctx) => {
     
     const paidDate = new Date(user.paidUntilDate);
     const dateString = paidDate.toLocaleDateString('en-GB');
+
+    if (ctx.session.userId === subscriberId) {
+      ctx.session.paidUntilDate = user.paidUntilDate;
+    }
       
     await ctx.reply(`Subscription enabled successfuly, last date: ${dateString}`);
 

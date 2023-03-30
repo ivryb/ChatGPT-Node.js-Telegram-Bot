@@ -14,9 +14,12 @@ const getInitialSessionData = () => ({
   lastName: null,
   username: null,
   isPremium: null,
-  
+
   paidUntilDate: null,
   freeRequestsLeft: 10,
+
+  isPro: false,
+  savedMessages: [],
 
   locale: null
 });
@@ -75,7 +78,7 @@ export const isAllowedUser = (ctx) => {
 
 export const hasPaidRequests = (ctx) => {
   const { paidUntilDate } = ctx.session;
-  
+
   if (!paidUntilDate) return false;
 
   const now = Date.now();
@@ -87,7 +90,7 @@ export const canMakeRequest = (ctx) => {
   // if (isAdmin(ctx)) {
   //   return false;
   // }
-  
+
   return isAllowedUser(ctx) || hasFreeRequests(ctx) || hasPaidRequests(ctx);
 }
 
@@ -101,10 +104,10 @@ export const hasLocale = (ctx) => {
 
 export const removeFreeRequest = (ctx) => {
   const { freeRequestsLeft } = ctx.session;
-  
+
   if (freeRequestsLeft > 0) {
     ctx.session.freeRequestsLeft = freeRequestsLeft - 1;
-    
+
     console.log('Free request removed', ctx.session.userId, ctx.session.freeRequestsLeft);
   }
 }
@@ -113,7 +116,7 @@ export const enableUserSubscription = async (userId, months) => {
   const user = await getUser(userId);
 
   const now = Date.now();
-    
+
   const subscriptionPeriod = 1000 * 60 * 60 * 24 * 31 * months;
 
   user.paidUntilDate = now + subscriptionPeriod;
@@ -121,4 +124,30 @@ export const enableUserSubscription = async (userId, months) => {
   await updateUser(userId, user);
 
   return user;
+}
+
+export const isProMode = (ctx) => {
+  return Boolean(ctx.session.isPro);
+}
+
+export const setProMode = (ctx, status) => {
+  ctx.session.isPro = status;
+}
+
+export const getSavedMessages = (ctx) => {
+  if (isProMode(ctx)) {
+    return ctx.session.savedMessages || [];
+  } else {
+    return [];
+  }
+}
+
+export const saveUserMessages = (ctx, messages) => {
+  const savedMessages = getSavedMessages(ctx);
+
+  ctx.session.savedMessages = [...savedMessages, ...messages];
+}
+
+export const clearSavedMessages = (ctx) => {
+  ctx.session.savedMessages = [];
 }

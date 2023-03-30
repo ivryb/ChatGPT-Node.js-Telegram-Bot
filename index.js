@@ -21,6 +21,11 @@ import {
   enableUserSubscription,
   adminId,
   getPrettyUserId,
+  isProMode,
+  setProMode,
+  getSavedMessages,
+  saveUserMessages,
+  clearSavedMessages
 } from './db.js';
 
 const amp = new Amplitude(amplitudeApiKey);
@@ -62,7 +67,7 @@ const clearLastActivity = () => {
 
 const saveActiveUser = (user) => {
   requestsCounter++;
-  
+
   if (!lastActiveUsersIds.includes(user.userId)) {
     lastActiveUsersIds.push(user.userId);
     lastActiveUsers[user.userId] = user;
@@ -114,7 +119,7 @@ const sendSelectLanguageMessage = async (ctx, destination) => {
 
 const selectLocale = (locale, isStart) => async (ctx) => {
   ctx.session.locale = locale;
-  
+
   await ctx.i18n.renegotiateLocale();
 
   if (isStart) {
@@ -135,7 +140,7 @@ const selectLocale = (locale, isStart) => async (ctx) => {
 
 bot.command('start', async (ctx) => {
   saveUser(ctx, ctx.msg.from);
-  
+
   saveActiveUser(ctx.session);
 
   if (hasLocale(ctx)) {
@@ -143,7 +148,7 @@ bot.command('start', async (ctx) => {
   } else {
     await sendSelectLanguageMessage(ctx, 'start');
   }
-  
+
   amp.track({
     eventType: 'Start',
     userId: ctx.session.userId,
@@ -155,7 +160,7 @@ bot.command('language', async (ctx) => {
   sendSelectLanguageMessage(ctx, 'language');
 
   saveActiveUser(ctx.session);
-  
+
   amp.track({
     eventType: 'LanguageCommand',
     userId: ctx.session.userId,
@@ -172,7 +177,7 @@ bot.command('examples', async (ctx) => {
   await ctx.replyWithHTML(ctx.t('examples'));
 
   saveActiveUser(ctx.session);
-  
+
   amp.track({
     eventType: 'Examples',
     userId: ctx.session.userId,
@@ -180,21 +185,21 @@ bot.command('examples', async (ctx) => {
   });
 });
 
-bot.command('confirm', async (ctx) => {    
+bot.command('confirm', async (ctx) => {
   if (!isAdmin(ctx)) {
     await ctx.reply('You are not allowed to use that command!');
   } else {
     const [subscriberId, months] = ctx.match.split(' ').map(Number);
-    
+
     const user = await enableUserSubscription(subscriberId, months);
-    
+
     const paidDate = new Date(user.paidUntilDate);
     const dateString = paidDate.toLocaleDateString('en-GB');
 
     if (ctx.session.userId === subscriberId) {
       ctx.session.paidUntilDate = user.paidUntilDate;
     }
-      
+
     await ctx.reply(`Subscription enabled successfuly, last date: ${dateString}`);
 
     const userMessage = i18n.t(user.locale ?? 'uk', 'you-are-subscribed', { dateString });
@@ -212,10 +217,33 @@ bot.command('confirm', async (ctx) => {
   }
 });
 
-bot.command('status', async (ctx) => {    
+bot.command('status', async (ctx) => {
   await ctx.reply(`I'm fine) New requests: ${requestsCounter}${listLastActiveUsers()}`);
-  
+
   clearLastActivity();
+});
+
+bot.command('pro', async (ctx) => {
+  if (isAdmin(ctx)) {
+    setProMode(ctx, true);
+
+    await ctx.reply('Pro mode is enabled, your message history will now be saved');
+  } else {
+    await ctx.reply('You are not allowed to use that command!');
+  }
+});
+
+bot.command('default', async (ctx) => {
+  setProMode(ctx, false);
+  clearSavedMessages(ctx);
+
+  await ctx.reply('Pro mode is disabled, message history will not be saved any more');
+});
+
+bot.command('clear', async (ctx) => {
+  clearSavedMessages(ctx);
+
+  await ctx.reply('Message history is cleared');
 });
 
 const sendTrialEndedMessage = async (ctx) => {
@@ -223,7 +251,7 @@ const sendTrialEndedMessage = async (ctx) => {
     monthPrice,
     sixMonthsPrice
   });
-  
+
   await ctx.replyWithHTML(msg, {
     reply_markup: new InlineKeyboard()
       .text(ctx.t('subscribe'), 'paymentInstructions')
@@ -248,26 +276,38 @@ bot.on('message', async (ctx) => {
     await sendTrialEndedMessage(ctx);
   } else {
     const fastReply = await ctx.reply(ctx.t('generating-response'));
-    
+
+    const savedMessages = getSavedMessages(ctx);
+
+    const userMessage = {
+      role: 'user',
+      content: ctx.message.text
+    };
+
     try {
       const { data } = await openai.createChatCompletion({
         model: 'gpt-3.5-turbo',
         messages: [
-          {
-            role: 'user',
-            content: ctx.message.text
-          }
+          ...savedMessages,
+          userMessage
         ]
       });
-  
+
       const responseText = data.choices[0].message.content;
-  
+
       await ctx.reply(responseText);
 
       if (isFreeUser(ctx)) {
         removeFreeRequest(ctx);
       };
-      
+
+      if (isProMode(ctx)) {
+        saveUserMessages(ctx, [
+          userMessage,
+          { role: 'assistant', content: responseText }
+        ]);
+      }
+
       amp.track({
         eventType: 'RequestMade',
         userId: ctx.session.userId,
@@ -278,7 +318,7 @@ bot.on('message', async (ctx) => {
       if (isFreeUser(ctx) && !canMakeRequest(ctx)) {
         await sendTrialEndedMessage(ctx);
       }
-    } catch (error) {      
+    } catch (error) {
       if (error.response) {
         console.log(error.response.status);
         console.log(error.response.data);
@@ -307,7 +347,7 @@ bot.callbackQuery('paymentInstructions', async (ctx) => {
     monthPrice,
     sixMonthsPrice
   });
-  
+
   await ctx.replyWithHTML(msg, {
     disable_web_page_preview: true,
     reply_markup: new InlineKeyboard().text(ctx.t('i-paid'), 'paymentCheck')
@@ -323,7 +363,7 @@ bot.callbackQuery('paymentInstructions', async (ctx) => {
 
 bot.callbackQuery('paymentCheck', async (ctx) => {
   await ctx.replyWithHTML(ctx.t('checking-payment'));
-  
+
   await ctx.answerCallbackQuery();
 
   await bot.api.sendMessage(adminId, `User payment reported: ${getPrettyUserId(ctx.session)}`);

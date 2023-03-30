@@ -28,6 +28,8 @@ import {
   clearSavedMessages
 } from './db.js';
 
+import { chunkSubstr } from './utils.js';
+
 const amp = new Amplitude(amplitudeApiKey);
 
 const configuration = new Configuration({
@@ -294,8 +296,11 @@ bot.on('message', async (ctx) => {
       });
 
       const responseText = data.choices[0].message.content;
+      const chunks = chunkSubstr(responseText, 4000);
 
-      await ctx.reply(responseText);
+      for (let chunk of chunks) {
+        await ctx.reply(responseText);
+      };
 
       if (isFreeUser(ctx)) {
         removeFreeRequest(ctx);

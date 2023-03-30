@@ -242,6 +242,12 @@ bot.command('default', async (ctx) => {
   await ctx.reply('Pro mode is disabled, message history will not be saved any more');
 });
 
+bot.command('mode', async (ctx) => {
+  const { isPro } = ctx.session;
+
+  await ctx.reply(`Current mode: ${isPro ? 'Pro' : 'Default'}`);
+});
+
 bot.command('clear', async (ctx) => {
   clearSavedMessages(ctx);
 

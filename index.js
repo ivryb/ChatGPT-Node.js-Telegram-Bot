@@ -304,8 +304,8 @@ bot.on('message', async (ctx) => {
       const responseText = data.choices[0].message.content;
       const chunks = chunkSubstr(responseText, 4000);
 
-      for (let chunk of chunks) {
-        await ctx.reply(responseText);
+      for (const chunk of chunks) {
+        await ctx.reply(chunk);
       };
 
       if (isFreeUser(ctx)) {

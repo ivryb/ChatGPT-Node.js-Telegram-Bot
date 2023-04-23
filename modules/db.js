@@ -117,12 +117,18 @@ export const getUsageDate = () => {
   return new Date().toLocaleDateString('en-GB');
 };
 
-export const hasFreeRequests = (ctx) => {
+export const getFreeRequestsCount = (ctx) => {
   const { freeRequestsLeft, lastUsageDate } = ctx.session;
 
   const currentUsageDate = getUsageDate();
 
-  return (lastUsageDate !== currentUsageDate || freeRequestsLeft > 0)
+  return lastUsageDate === currentUsageDate
+    ? freeRequestsLeft
+    : dailyFreeRequests
+}
+
+export const hasFreeRequests = (ctx) => {
+  return getFreeRequestsCount(ctx) > 0;
 }
 
 export const removeFreeRequest = (ctx) => {

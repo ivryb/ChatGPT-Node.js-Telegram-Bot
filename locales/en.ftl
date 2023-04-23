@@ -61,4 +61,17 @@ i-paid = Payment sent
 checking-payment = Thank you! We will check the payment status and notify you about the subscription activation ASAP 😇
 
 help =
-  If you have any questions or suggestions for improving this bot, you can always write to the developer - @ivryb
+  <b>Available bot commands:</b>
+  /examples — examples of ChatGPT usage
+  /balance — your balance
+  /language — language selection
+
+  If you have any questions or suggestions for improving this bot, you can always contact the developer — @ivryb
+
+balance =
+  Subscription status: <b>Unsubscribed</b>
+  Free requests for today: <b>{ $freeRequests }</b>
+
+balancePaid =
+  Subscription status: <b>Subscribed</b>
+  Subscription valid until: <b>{ $paidUntil }</b>

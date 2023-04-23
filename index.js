@@ -20,8 +20,10 @@ import {
   adminId,
   getPrettyUserId,
   isProMode,
+  getFreeRequestsCount,
   setProMode,
   getSavedMessages,
+  hasPaidRequests,
   saveUserMessages,
   clearSavedMessages
 } from './modules/db.js';
@@ -60,23 +62,23 @@ const sixMonthsPrice = 200;
 const setBotCommands = async (ctx) => {
   await bot.api.setMyCommands([
     { command: 'start', description: 'Start the bot' },
+    { command: 'help', description: 'Contact the developer' },
     { command: 'examples', description: 'Examples of ChatGPT usage' },
     { command: 'balance', description: 'Your balance' },
-    // { command: 'stats', description: 'Bot statistics' },
-    { command: 'help', description: 'Contact the developer' },
     { command: 'language', description: 'Language selection' },
     
+    // { command: 'stats', description: 'Bot statistics' },
     // { command: "settings", description: "Open settings" },
   ]);
 
   await bot.api.setMyCommands([
     { command: 'start', description: 'Запустити бота' },
+    { command: 'help', description: `Зв'язатися з розробником` },
     { command: 'examples', description: 'Приклади використання ChatGPT' },
     { command: 'balance', description: 'Переглянути баланс' },
-    // { command: 'stats', description: 'Статистика користування ботом' },
-    { command: 'help', description: `Зв'язатися з розробником` },
     { command: 'language', description: 'Змінити мову' },
 
+    // { command: 'stats', description: 'Статистика користування ботом' },
     // { command: "settings", description: "Open settings" },
   ], { language_code: 'uk' });
 
@@ -170,13 +172,41 @@ bot.command('examples', async (ctx) => {
 });
 
 bot.command('help', async (ctx) => {
-  await ctx.reply(ctx.t('help'));
+  await ctx.replyWithHTML(ctx.t('help'));
 
   amp.track({
     eventType: '/help',
     userId: ctx.session.userId,
     userProperties: ctx.session
   });
+});
+
+bot.command('balance', async (ctx) => {
+  try {
+    amp.track({
+      eventType: '/balance',
+      userId: ctx.session.userId,
+      userProperties: ctx.session
+    });
+  } catch (error) {
+    console.error('/balance amp error', error);
+  }
+  
+  const hasPaid = hasPaidRequests(ctx);
+  const freeRequests = getFreeRequestsCount(ctx);
+
+  if (hasPaid) {
+    const paidDate = new Date(ctx.session.paidUntilDate);
+    const paidUntil = paidDate.toLocaleDateString('en-GB');
+    
+    return await ctx.replyWithHTML(ctx.t('balancePaid', {
+      paidUntil
+    }));
+  }
+
+  return await ctx.replyWithHTML(ctx.t('balance', {
+    freeRequests
+  }));
 });
 
 bot.command('stats', async (ctx) => {

@@ -1,8 +1,16 @@
 export const botModesList = [
   'generalAssistant',
   'writingImprover',
-  'emailWriter ',
+  'emailWriter',
   'englishTranslator',
+  
+  'CVBuilder',
+  'homeworkSolver',
+  'tinderAssistant',
+  'startupIdeaGenerator',
+  'projectManager',
+  'englishTutor',
+  'codeDeveloper',
   // 'anyActor'
 ];
 

@@ -3,11 +3,9 @@ import { run, sequentialize } from '@grammyjs/runner';
 import { hydrateReply, parseMode } from '@grammyjs/parse-mode';
 import { I18n } from '@grammyjs/i18n';
 
-import Amplitude from 'amplitude';
-
 import { Configuration, OpenAIApi } from 'openai';
 
-const { chatBotToken, openAiKey, amplitudeApiKey, payLinkMonth, payLinkSixMonths, payLinkAny } = process.env;
+const { chatBotToken, openAiKey, payLinkAny } = process.env;
 
 import {
   botSession,
@@ -26,11 +24,13 @@ import {
   getSavedMessages,
   saveUserMessages,
   clearSavedMessages
-} from './db.js';
+} from './modules/db.js';
 
-import { chunkSubstr } from './utils.js';
+import { chunkSubstr } from './modules/utils.js';
 
-const amp = new Amplitude(amplitudeApiKey);
+import * as statsCollector from './modules/statsCollector.js';
+
+import { amp } from './modules/amplitude.js';
 
 const configuration = new Configuration({
   apiKey: openAiKey,
@@ -57,55 +57,37 @@ bot.use(i18n);
 const monthPrice = 50;
 const sixMonthsPrice = 200;
 
-let lastActiveUsersIds = [];
-let lastActiveUsers = {};
-let requestsCounter = 0;
-
-const clearLastActivity = () => {
-  lastActiveUsersIds = [];
-  lastActiveUsers = {};
-  requestsCounter = 0;
-};
-
-const saveActiveUser = (user) => {
-  requestsCounter++;
-
-  if (!lastActiveUsersIds.includes(user.userId)) {
-    lastActiveUsersIds.push(user.userId);
-    lastActiveUsers[user.userId] = user;
-  }
-}
-
-const listLastActiveUsers = () => {
-  return lastActiveUsersIds
-    .map((userId) => {
-      return `\n${getPrettyUserId(lastActiveUsers[userId])}`;
-    })
-    .join('');
-}
-
 const setBotCommands = async (ctx) => {
   await bot.api.setMyCommands([
     { command: 'start', description: 'Start the bot' },
-    // { command: 'help', description: "Show help text" },
-    // { command: "settings", description: "Open settings" },
-    { command: 'examples', description: 'Examples of using ChatGPT' },
+    { command: 'examples', description: 'Examples of ChatGPT usage' },
+    { command: 'balance', description: 'Your balance' },
+    // { command: 'stats', description: 'Bot statistics' },
+    { command: 'help', description: 'Contact the developer' },
     { command: 'language', description: 'Language selection' },
+    
+    // { command: "settings", description: "Open settings" },
   ]);
 
   await bot.api.setMyCommands([
     { command: 'start', description: 'Запустити бота' },
-    // { command: 'help', description: "Show help text" },
-    // { command: "settings", description: "Open settings" },
     { command: 'examples', description: 'Приклади використання ChatGPT' },
+    { command: 'balance', description: 'Переглянути баланс' },
+    // { command: 'stats', description: 'Статистика користування ботом' },
+    { command: 'help', description: `Зв'язатися з розробником` },
     { command: 'language', description: 'Змінити мову' },
+
+    // { command: "settings", description: "Open settings" },
   ], { language_code: 'uk' });
 
   await bot.api.setChatMenuButton({ type: 'commands' });
+
+  console.log('Bot commands updated');
 };
 
 setBotCommands();
 
+// Commands
 const sendStartMessages = async (ctx) => {
   await ctx.replyWithHTML(ctx.t('start'));
   await ctx.replyWithHTML(ctx.t('start-try'));
@@ -143,7 +125,7 @@ const selectLocale = (locale, isStart) => async (ctx) => {
 bot.command('start', async (ctx) => {
   saveUser(ctx, ctx.msg.from);
 
-  saveActiveUser(ctx.session);
+  statsCollector.saveActiveUser(ctx.session);
 
   if (hasLocale(ctx)) {
     await sendStartMessages(ctx);
@@ -161,7 +143,7 @@ bot.command('start', async (ctx) => {
 bot.command('language', async (ctx) => {
   sendSelectLanguageMessage(ctx, 'language');
 
-  saveActiveUser(ctx.session);
+  statsCollector.saveActiveUser(ctx.session);
 
   amp.track({
     eventType: 'LanguageCommand',
@@ -178,13 +160,29 @@ bot.callbackQuery('start_uk', selectLocale('uk', true));
 bot.command('examples', async (ctx) => {
   await ctx.replyWithHTML(ctx.t('examples'));
 
-  saveActiveUser(ctx.session);
+  statsCollector.saveActiveUser(ctx.session);
 
   amp.track({
     eventType: 'Examples',
     userId: ctx.session.userId,
     userProperties: ctx.session
   });
+});
+
+bot.command('help', async (ctx) => {
+  await ctx.reply(ctx.t('help'));
+
+  amp.track({
+    eventType: '/help',
+    userId: ctx.session.userId,
+    userProperties: ctx.session
+  });
+});
+
+bot.command('stats', async (ctx) => {
+  await ctx.reply(`I'm fine) New requests: ${statsCollector.requestsCounter}${statsCollector.listLastActiveUsers()}`);
+
+  statsCollector.clearLastActivity();
 });
 
 bot.command('confirm', async (ctx) => {
@@ -219,12 +217,7 @@ bot.command('confirm', async (ctx) => {
   }
 });
 
-bot.command('status', async (ctx) => {
-  await ctx.reply(`I'm fine) New requests: ${requestsCounter}${listLastActiveUsers()}`);
-
-  clearLastActivity();
-});
-
+// Pro mode
 bot.command('pro', async (ctx) => {
   if (isAdmin(ctx)) {
     setProMode(ctx, true);
@@ -254,6 +247,13 @@ bot.command('clear', async (ctx) => {
   await ctx.reply('Message history is cleared');
 });
 
+// Modes
+// bot.command('select', async (ctx) => {
+
+//   await ctx.reply();
+// });
+
+// Messages
 const sendTrialEndedMessage = async (ctx) => {
   const msg = ctx.t('trial-ended', {
     monthPrice,
@@ -276,7 +276,7 @@ bot.on('message', async (ctx) => {
 
   saveUser(ctx, user);
 
-  saveActiveUser(ctx.session);
+  statsCollector.saveActiveUser(ctx.session);
 
   console.log('Start message processing', user.id);
 
@@ -325,10 +325,6 @@ bot.on('message', async (ctx) => {
         userProperties: ctx.session,
         eventProperties: data.usage
       });
-
-      if (isFreeUser(ctx) && !canMakeRequest(ctx)) {
-        await sendTrialEndedMessage(ctx);
-      }
     } catch (error) {
       if (error.response) {
         console.log(error.response.status);

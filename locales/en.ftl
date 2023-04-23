@@ -15,24 +15,28 @@ start-try =
 examples =
   <b>Here are some examples of using ChatGPT</b>
 
-  <i>Поясни *(будь-яку-тему)* простими словами.</i>
+  <i>Explain to me *(any-topic)* like to a 6-years-old.</i>
 
-  <i>Ти — професійний письменник. Перепиши цей текст в стилі художнього роману, не змінюючи його сенсу: …</i>
+  <i>You are a professional writer. Rewrite this text in the style of a fictional novel without changing its meaning: …</i>
 
-  <i>Напиши 10 найцікавіших фактів з біографіі Черчілля.</i>
+  <i>Write the 10 most fascinating facts from Churchill's biography.</i>
 
-  <i>З якими проблемами найчастіше зіштовхуються люди, що вивчають програмування?</i>
+  <i>What are the most common problems faced by people learning programming?</i>
   
-  <i>Допоможи мені написати листа з проханням взяти вихідний на роботі, по причині…</i>
+  <i>Help me write a letter with a request to take a day off from work, for the reason...</i>
 
-  <i>Ти — аналітик даних, що спеціалізується на стартапах в сфері освіти. Напиши 10 ідей для прибуткового edtech-стартапу, на базі ринкових даних.</i>
+  <i>Write 10 ideas for a profitable edtech startup, based on market data.</i>
 
-  <i>Напиши код простого Telegram-бота на мові JavaScript.</i>
+  <i>Write the code for a simple Telegram bot in JavaScript.</i>
 
 trial-ended = 
-  Unfortunately, the OpenAI API which powers this bot is not free. However, thanks to this, the bot generates answers much faster than the free website, and you <b>don't need</b> to buy an official OpenAI subscription that costs <b>$20/month</b>.
+  Oops, looks like you've already used your 5 free requests today(
+  New free requests are added daily.
 
-  We have provided you with 10 free requests. To continue using the bot, you can purchase a low-cost subscription for <b>{ $monthPrice } UAH/month</b> or <b>{ $sixMonthsPrice } UAH/6 months</b>, so that we can continue to pay for the API.
+  For unlimited access, you can purchase a low-cost subscription for <b>{ $monthPrice } UAH/month</b> or <b>{ $sixMonthsPrice } UAH/6 months</b>.
+
+  It's much cheaper and more convenient than the official Pro plan from OpenAI, which costs <b>$20/month!</b>
+  In addition, this way you will support a Ukrainian developer 🇺🇦🤘🏻
 
 subscribe = Buy a subscription
 
@@ -55,3 +59,6 @@ payment-instructions =
 i-paid = Payment sent
 
 checking-payment = Thank you! We will check the payment status and notify you about the subscription activation ASAP 😇
+
+help =
+  If you have any questions or suggestions for improving this bot, you can always write to the developer - @ivryb

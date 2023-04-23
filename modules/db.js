@@ -8,6 +8,8 @@ const { allowedUsersIdsString, adminIdString, redisURL } = process.env;
 const allowedUsersIds = allowedUsersIdsString.split(',').map(Number);
 export const adminId = Number(adminIdString);
 
+export const dailyFreeRequests = 5;
+
 const getInitialSessionData = () => ({
   userId: null,
   firstName: null,
@@ -16,7 +18,8 @@ const getInitialSessionData = () => ({
   isPremium: null,
 
   paidUntilDate: null,
-  freeRequestsLeft: 10,
+  freeRequestsLeft: dailyFreeRequests,
+  lastUsageDate: null,
 
   isPro: false,
   savedMessages: [],
@@ -66,20 +69,22 @@ export const saveUser = (ctx, user) => {
 
 export const isAdmin = (ctx) => ctx.session.userId === adminId;
 
-export const hasFreeRequests = (ctx) => {
-  const { freeRequestsLeft } = ctx.session;
-
-  return freeRequestsLeft > 0;
-}
-
 export const isAllowedUser = (ctx) => {
+  // if (isAdmin(ctx)) {
+  //   return false;
+  // }
+  
   return allowedUsersIds.includes(ctx.session.userId);
 }
 
 export const hasPaidRequests = (ctx) => {
+  // if (isAdmin(ctx)) {
+  //   return false;
+  // }
+  
   const { paidUntilDate } = ctx.session;
 
-  if (!paidUntilDate) return false;
+  if (!paidUntilDate) return false;  
 
   const now = Date.now();
 
@@ -95,6 +100,10 @@ export const canMakeRequest = (ctx) => {
 }
 
 export const isFreeUser = (ctx) => {
+  // if (isAdmin(ctx)) {
+  //   return true;
+  // }
+  
   return !isAllowedUser(ctx) && !hasPaidRequests(ctx);
 }
 
@@ -102,13 +111,30 @@ export const hasLocale = (ctx) => {
   return Boolean(ctx.session.locale);
 }
 
+export const getUsageDate = () => {
+  const date = new Date();
+
+  return new Date().toLocaleDateString('en-GB');
+};
+
+export const hasFreeRequests = (ctx) => {
+  const { freeRequestsLeft, lastUsageDate } = ctx.session;
+
+  const currentUsageDate = getUsageDate();
+
+  return (lastUsageDate !== currentUsageDate || freeRequestsLeft > 0)
+}
+
 export const removeFreeRequest = (ctx) => {
-  const { freeRequestsLeft } = ctx.session;
+  const { freeRequestsLeft, lastUsageDate } = ctx.session;
 
-  if (freeRequestsLeft > 0) {
+  const currentUsageDate = getUsageDate();
+
+  if (lastUsageDate !== currentUsageDate) {
+    ctx.session.lastUsageDate = currentUsageDate;
+    ctx.session.freeRequestsLeft = dailyFreeRequests - 1;
+  } else if (freeRequestsLeft > 0) {
     ctx.session.freeRequestsLeft = freeRequestsLeft - 1;
-
-    console.log('Free request removed', ctx.session.userId, ctx.session.freeRequestsLeft);
   }
 }
 

@@ -62,6 +62,7 @@ checking-payment = Thank you! We will check the payment status and notify you ab
 
 help =
   <b>Available bot commands:</b>
+  /select — select the bot mode
   /examples — examples of ChatGPT usage
   /balance — your balance
   /language — language selection
@@ -75,3 +76,8 @@ balance =
 balancePaid =
   Subscription status: <b>Subscribed</b>
   Subscription valid until: <b>{ $paidUntil }</b>
+
+modes-list = Here are some available modes. Which one do you want to choose?
+
+you-selected-mode = You've selected the <b>{ $emoji } { $title }</b> bot.
+  

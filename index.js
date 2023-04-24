@@ -3,9 +3,7 @@ import { run, sequentialize } from '@grammyjs/runner';
 import { hydrateReply, parseMode } from '@grammyjs/parse-mode';
 import { I18n } from '@grammyjs/i18n';
 
-import { Configuration, OpenAIApi } from 'openai';
-
-const { chatBotToken, openAiKey, payLinkAny } = process.env;
+const { chatBotToken, payLinkAny } = process.env;
 
 import {
   botSession,
@@ -22,11 +20,17 @@ import {
   isProMode,
   getFreeRequestsCount,
   setProMode,
+  setBotMode,
+  getBotMode,
   getSavedMessages,
   hasPaidRequests,
   saveUserMessages,
-  clearSavedMessages
+  clearSavedMessages,
+  localeNegotiator,
+  defaultLocale
 } from './modules/db.js';
+
+import { botModesList } from './modules/modes.js';
 
 import { chunkSubstr } from './modules/utils.js';
 
@@ -34,18 +38,12 @@ import * as statsCollector from './modules/statsCollector.js';
 
 import { amp } from './modules/amplitude.js';
 
-const configuration = new Configuration({
-  apiKey: openAiKey,
-});
-
-const openai = new OpenAIApi(configuration);
+import { getChatGPTResponse } from './modules/openai.js';
 
 const i18n = new I18n({
   directory: 'locales',
-
-  defaultLocale: 'uk',
-
-  localeNegotiator: (ctx) => ctx.session.locale ?? 'uk',
+  defaultLocale,
+  localeNegotiator
 });
 
 const bot = new Bot(chatBotToken);
@@ -62,21 +60,23 @@ const sixMonthsPrice = 200;
 const setBotCommands = async (ctx) => {
   await bot.api.setMyCommands([
     { command: 'start', description: 'Start the bot' },
+    { command: 'select', description: 'Select the bot mode' },
+    { command: 'language', description: 'Language selection' },
     { command: 'help', description: 'Contact the developer' },
     { command: 'examples', description: 'Examples of ChatGPT usage' },
     { command: 'balance', description: 'Your balance' },
-    { command: 'language', description: 'Language selection' },
-    
+
     // { command: 'stats', description: 'Bot statistics' },
     // { command: "settings", description: "Open settings" },
   ]);
 
   await bot.api.setMyCommands([
     { command: 'start', description: 'Запустити бота' },
+    { command: 'select', description: 'Обрати режим бота' },
+    { command: 'language', description: 'Змінити мову' },
     { command: 'help', description: `Зв'язатися з розробником` },
     { command: 'examples', description: 'Приклади використання ChatGPT' },
     { command: 'balance', description: 'Переглянути баланс' },
-    { command: 'language', description: 'Змінити мову' },
 
     // { command: 'stats', description: 'Статистика користування ботом' },
     // { command: "settings", description: "Open settings" },
@@ -89,7 +89,9 @@ const setBotCommands = async (ctx) => {
 
 setBotCommands();
 
-// Commands
+
+// Start & Locale selection
+
 const sendStartMessages = async (ctx) => {
   await ctx.replyWithHTML(ctx.t('start'));
   await ctx.replyWithHTML(ctx.t('start-try'));
@@ -100,27 +102,6 @@ const sendSelectLanguageMessage = async (ctx, destination) => {
     reply_markup: new InlineKeyboard()
       .text('English', `${destination}_en`).row()
       .text('Українська', `${destination}_uk`).row()
-  });
-};
-
-const selectLocale = (locale, isStart) => async (ctx) => {
-  ctx.session.locale = locale;
-
-  await ctx.i18n.renegotiateLocale();
-
-  if (isStart) {
-    await sendStartMessages(ctx);
-  } else {
-    await ctx.replyWithHTML(ctx.t('language-changed'));
-  }
-
-  await ctx.answerCallbackQuery();
-
-  amp.track({
-    eventType: 'SelectLanguage',
-    userId: ctx.session.userId,
-    userProperties: ctx.session,
-    eventProperties: { locale }
   });
 };
 
@@ -154,10 +135,90 @@ bot.command('language', async (ctx) => {
   });
 });
 
+const selectLocale = (locale, isStart) => async (ctx) => {
+  ctx.session.locale = locale;
+
+  await ctx.i18n.renegotiateLocale();
+
+  if (isStart) {
+    await sendStartMessages(ctx);
+  } else {
+    await ctx.replyWithHTML(ctx.t('language-changed'));
+  }
+
+  await ctx.answerCallbackQuery();
+
+  amp.track({
+    eventType: 'SelectLanguage',
+    userId: ctx.session.userId,
+    userProperties: ctx.session,
+    eventProperties: { locale }
+  });
+};
+
 bot.callbackQuery('language_en', selectLocale('en'));
 bot.callbackQuery('language_uk', selectLocale('uk'));
 bot.callbackQuery('start_en', selectLocale('en', true));
 bot.callbackQuery('start_uk', selectLocale('uk', true));
+
+
+// Modes
+
+bot.command('select', async (ctx) => {
+  const locale = await ctx.i18n.getLocale();
+  
+  const keyboard = new InlineKeyboard();
+
+  for (const botMode of botModesList) {
+    keyboard.text(`${botMode.emoji} ${botMode[locale].title}`, `selectmode_${botMode.key}`).row();
+  }
+  
+  await ctx.replyWithHTML(ctx.t('modes-list'), {
+    reply_markup: keyboard
+  });
+});
+
+bot.on('callback_query:data', async (ctx) => {  
+  const callbackData = ctx.callbackQuery.data;
+
+  if (callbackData.includes('selectmode_')) {
+    const userId = ctx.session.userId;
+    
+    const locale = await ctx.i18n.getLocale();
+    
+    const modeId = callbackData.replace('selectmode_', '');
+    const botMode = botModesList.find((item) => item.key === modeId);
+    const localeBot = botMode[locale];
+
+    try {
+      await ctx.replyWithHTML(ctx.t('you-selected-mode', {
+        emoji: botMode.emoji,
+        title: localeBot.title
+      }));
+  
+      await ctx.replyWithHTML(`${botMode.emoji} <b>${localeBot.welcomeMessage}</b>`);
+  
+      await setBotMode(ctx, { botMode });
+  
+      amp.track({
+        eventType: 'Set bot mode',
+        userId,
+        eventProperties: {
+          botModeName: localeBot.title
+        }
+      });
+    } catch (error) {
+      console.error('Error - update bot mode', error);
+      
+      await ctx.reply('Something went wrong(\n\nPlease, try again or contact @ivryb');
+    }
+  }
+
+  await ctx.answerCallbackQuery();
+});
+
+
+// Other commands
 
 bot.command('examples', async (ctx) => {
   await ctx.replyWithHTML(ctx.t('examples'));
@@ -191,14 +252,14 @@ bot.command('balance', async (ctx) => {
   } catch (error) {
     console.error('/balance amp error', error);
   }
-  
+
   const hasPaid = hasPaidRequests(ctx);
   const freeRequests = getFreeRequestsCount(ctx);
 
   if (hasPaid) {
     const paidDate = new Date(ctx.session.paidUntilDate);
     const paidUntil = paidDate.toLocaleDateString('en-GB');
-    
+
     return await ctx.replyWithHTML(ctx.t('balancePaid', {
       paidUntil
     }));
@@ -247,7 +308,9 @@ bot.command('confirm', async (ctx) => {
   }
 });
 
+
 // Pro mode
+
 bot.command('pro', async (ctx) => {
   if (isAdmin(ctx)) {
     setProMode(ctx, true);
@@ -277,11 +340,6 @@ bot.command('clear', async (ctx) => {
   await ctx.reply('Message history is cleared');
 });
 
-// Modes
-// bot.command('select', async (ctx) => {
-
-//   await ctx.reply();
-// });
 
 // Messages
 const sendTrialEndedMessage = async (ctx) => {
@@ -308,34 +366,29 @@ bot.on('message', async (ctx) => {
 
   statsCollector.saveActiveUser(ctx.session);
 
-  console.log('Start message processing', user.id);
-
   if (!canMakeRequest(ctx)) {
     await sendTrialEndedMessage(ctx);
   } else {
     const fastReply = await ctx.reply(ctx.t('generating-response'));
+    
+    const botMode = getBotMode(ctx);
+    const locale = await ctx.i18n.getLocale();
+
+    const userMessage = ctx.message.text;
 
     const savedMessages = getSavedMessages(ctx);
 
-    const userMessage = {
-      role: 'user',
-      content: ctx.message.text
-    };
-
     try {
-      const { data } = await openai.createChatCompletion({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          ...savedMessages,
-          userMessage
-        ]
+      const { responseText, usage, requestTime } = await getChatGPTResponse({
+        userMessage,
+        personaPrompt: botMode[locale].prompt,
+        savedMessages
       });
 
-      const responseText = data.choices[0].message.content;
-      const chunks = chunkSubstr(responseText, 4000);
+      const chunks = chunkSubstr(responseText, 3950);
 
       for (const chunk of chunks) {
-        await ctx.reply(chunk);
+        await ctx.reply(`${botMode.emoji} ${chunk}`);
       };
 
       if (isFreeUser(ctx)) {
@@ -344,7 +397,7 @@ bot.on('message', async (ctx) => {
 
       if (isProMode(ctx)) {
         saveUserMessages(ctx, [
-          userMessage,
+          { role: 'user', content: userMessage },
           { role: 'assistant', content: responseText }
         ]);
       }
@@ -353,7 +406,10 @@ bot.on('message', async (ctx) => {
         eventType: 'RequestMade',
         userId: ctx.session.userId,
         userProperties: ctx.session,
-        eventProperties: data.usage
+        eventProperties: {
+          ...usage,
+          requestTime
+        }
       });
     } catch (error) {
       if (error.response) {
@@ -374,8 +430,6 @@ bot.on('message', async (ctx) => {
 
     ctx.api.deleteMessage(ctx.chat.id, fastReply.message_id);
   }
-
-  console.log('End message processing', user.id);
 });
 
 bot.callbackQuery('paymentInstructions', async (ctx) => {

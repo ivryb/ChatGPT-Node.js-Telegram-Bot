@@ -3,6 +3,8 @@ import { session } from 'grammy';
 import { RedisAdapter } from '@grammyjs/storage-redis';
 import IORedis from 'ioredis';
 
+import { defaultBotMode } from './modes.js';
+
 const { allowedUsersIdsString, adminIdString, redisURL } = process.env;
 
 const allowedUsersIds = allowedUsersIdsString.split(',').map(Number);
@@ -21,11 +23,29 @@ const getInitialSessionData = () => ({
   freeRequestsLeft: dailyFreeRequests,
   lastUsageDate: null,
 
+  botMode: null,
+
   isPro: false,
   savedMessages: [],
 
   locale: null
 });
+
+export const defaultLocale = 'uk';
+
+export const supportedLocales = ['en', 'uk'];
+
+export const hasLocale = (ctx) => {
+  return supportedLocales.includes(ctx.session.locale);
+}
+
+export const localeNegotiator = (ctx) => {
+  if (supportedLocales.includes(ctx.session.locale)) {
+    return ctx.session.locale;
+  }
+
+  return defaultLocale;
+}
 
 export const getPrettyUserId = (user) => {
   const { username, firstName, lastName, userId } = user;
@@ -73,7 +93,7 @@ export const isAllowedUser = (ctx) => {
   // if (isAdmin(ctx)) {
   //   return false;
   // }
-  
+
   return allowedUsersIds.includes(ctx.session.userId);
 }
 
@@ -81,10 +101,10 @@ export const hasPaidRequests = (ctx) => {
   // if (isAdmin(ctx)) {
   //   return false;
   // }
-  
+
   const { paidUntilDate } = ctx.session;
 
-  if (!paidUntilDate) return false;  
+  if (!paidUntilDate) return false;
 
   const now = Date.now();
 
@@ -103,12 +123,8 @@ export const isFreeUser = (ctx) => {
   // if (isAdmin(ctx)) {
   //   return true;
   // }
-  
-  return !isAllowedUser(ctx) && !hasPaidRequests(ctx);
-}
 
-export const hasLocale = (ctx) => {
-  return Boolean(ctx.session.locale);
+  return !isAllowedUser(ctx) && !hasPaidRequests(ctx);
 }
 
 export const getUsageDate = () => {
@@ -158,6 +174,20 @@ export const enableUserSubscription = async (userId, months) => {
   return user;
 }
 
+
+// Modes
+
+export const setBotMode = (ctx, { botMode }) => {
+  ctx.session.botMode = botMode;
+};
+
+export const getBotMode = (ctx) => {
+  return ctx.session.botMode ?? defaultBotMode;
+}
+
+
+// Pro mode & saved messages
+
 export const isProMode = (ctx) => {
   return Boolean(ctx.session.isPro);
 }
@@ -169,9 +199,9 @@ export const setProMode = (ctx, status) => {
 export const getSavedMessages = (ctx) => {
   if (isProMode(ctx)) {
     return ctx.session.savedMessages || [];
-  } else {
-    return [];
   }
+  
+  return [];
 }
 
 export const saveUserMessages = (ctx, messages) => {

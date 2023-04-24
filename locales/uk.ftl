@@ -63,6 +63,7 @@ you-are-subscribed =
 
 help =
   <b>Список доступних команд:</b>
+  /select — обрати режим бота
   /examples — приклади використання ChatGPT
   /balance — переглянути баланc
   /language — змінити мову
@@ -76,3 +77,7 @@ balance =
 balancePaid =
   Підписка: <b>Активована</b>
   Підписка дійсна до: <b>{ $paidUntil }</b>
+
+modes-list = Який режим роботи бота ви хочете обрати?
+
+you-selected-mode = Ви обрали режим <b>{ $emoji } { $title }</b>

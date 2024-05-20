@@ -1,6 +1,6 @@
 language-changed = Language changed successfully!
 
-start = 
+start =
   Hi! This bot allows you to quickly and conveniently use ChatGPT, without having to open a slow website.
 
   ChatGPT is an Artificial Intelligence model from OpenAI that can answer questions and perform various tasks. It's trained on an extremely large amount of textual information and can understand your messages really well.
@@ -22,25 +22,22 @@ examples =
   <i>Write the 10 most fascinating facts from Churchill's biography.</i>
 
   <i>What are the most common problems faced by people learning programming?</i>
-  
+
   <i>Help me write a letter with a request to take a day off from work, for the reason...</i>
 
   <i>Write 10 ideas for a profitable edtech startup, based on market data.</i>
 
   <i>Write the code for a simple Telegram bot in JavaScript.</i>
 
-trial-ended = 
-  Oops, looks like you've already used your 5 free requests today(
+trial-ended =
+  Oops, looks like you've already used your 10 free requests today(
   New free requests are added daily.
+  For unlimited access, please DM @ivryb
 
-  For unlimited access, you can purchase a low-cost subscription for <b>{ $monthPrice } UAH/month</b> or <b>{ $sixMonthsPrice } UAH/6 months</b>.
-
-  It's much cheaper and more convenient than the official Pro plan from OpenAI, which costs <b>$20/month!</b>
-  In addition, this way you will support a Ukrainian developer 🇺🇦🤘🏻
 
 subscribe = Buy a subscription
 
-you-are-subscribed = 
+you-are-subscribed =
   Thank you for the payment! Your subscription has been successfully activated.
   It is valid until <b>{ $dateString }</b>
 
@@ -80,4 +77,3 @@ balancePaid =
 modes-list = Here are some available modes. Which one do you want to choose?
 
 you-selected-mode = You've selected the <b>{ $emoji } { $title }</b> bot.
-  

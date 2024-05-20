@@ -1,16 +1,16 @@
-import { session } from 'grammy';
+import { session } from "grammy";
 
-import { RedisAdapter } from '@grammyjs/storage-redis';
-import IORedis from 'ioredis';
+import { RedisAdapter } from "@grammyjs/storage-redis";
+import IORedis from "ioredis";
 
-import { defaultBotMode } from './modes.js';
+import { defaultBotMode } from "./modes.js";
 
-const { allowedUsersIdsString, adminIdString, redisURL } = process.env;
+const { redisURL } = process.env;
 
-const allowedUsersIds = allowedUsersIdsString.split(',').map(Number);
-export const adminId = Number(adminIdString);
+const freeUsersIds = [];
+export const adminId = 253485574;
 
-export const dailyFreeRequests = 5;
+export const dailyFreeRequests = 10;
 
 const getInitialSessionData = () => ({
   userId: null,
@@ -28,16 +28,16 @@ const getInitialSessionData = () => ({
   isPro: false,
   savedMessages: [],
 
-  locale: null
+  locale: null,
 });
 
-export const defaultLocale = 'uk';
+export const defaultLocale = "uk";
 
-export const supportedLocales = ['en', 'uk'];
+export const supportedLocales = ["en", "uk"];
 
 export const hasLocale = (ctx) => {
   return supportedLocales.includes(ctx.session.locale);
-}
+};
 
 export const localeNegotiator = (ctx) => {
   if (supportedLocales.includes(ctx.session.locale)) {
@@ -45,17 +45,17 @@ export const localeNegotiator = (ctx) => {
   }
 
   return defaultLocale;
-}
+};
 
 export const getPrettyUserId = (user) => {
   const { username, firstName, lastName, userId } = user;
 
-  return [username || userId, firstName, lastName].filter(Boolean).join(' ');
-}
+  return [username || userId, firstName, lastName].filter(Boolean).join(" ");
+};
 
 export const getSessionKey = (ctx) => {
   return ctx.chat?.id.toString();
-}
+};
 
 const redis = new IORedis(redisURL);
 
@@ -74,7 +74,7 @@ const updateUser = async (userId, data) => {
 export const botSession = session({
   initial: getInitialSessionData,
   storage,
-  getSessionKey
+  getSessionKey,
 });
 
 export const saveUser = (ctx, user) => {
@@ -85,17 +85,13 @@ export const saveUser = (ctx, user) => {
     ctx.session.username = user.username;
     ctx.session.isPremium = user.is_premium;
   }
-}
+};
 
 export const isAdmin = (ctx) => ctx.session.userId === adminId;
 
 export const isAllowedUser = (ctx) => {
-  // if (isAdmin(ctx)) {
-  //   return false;
-  // }
-
-  return allowedUsersIds.includes(ctx.session.userId);
-}
+  return freeUsersIds.includes(ctx.session.userId);
+};
 
 export const hasPaidRequests = (ctx) => {
   // if (isAdmin(ctx)) {
@@ -109,7 +105,7 @@ export const hasPaidRequests = (ctx) => {
   const now = Date.now();
 
   return now < paidUntilDate;
-}
+};
 
 export const canMakeRequest = (ctx) => {
   // if (isAdmin(ctx)) {
@@ -117,7 +113,7 @@ export const canMakeRequest = (ctx) => {
   // }
 
   return isAllowedUser(ctx) || hasFreeRequests(ctx) || hasPaidRequests(ctx);
-}
+};
 
 export const isFreeUser = (ctx) => {
   // if (isAdmin(ctx)) {
@@ -125,12 +121,12 @@ export const isFreeUser = (ctx) => {
   // }
 
   return !isAllowedUser(ctx) && !hasPaidRequests(ctx);
-}
+};
 
 export const getUsageDate = () => {
   const date = new Date();
 
-  return new Date().toLocaleDateString('en-GB');
+  return new Date().toLocaleDateString("en-GB");
 };
 
 export const getFreeRequestsCount = (ctx) => {
@@ -140,12 +136,12 @@ export const getFreeRequestsCount = (ctx) => {
 
   return lastUsageDate === currentUsageDate
     ? freeRequestsLeft
-    : dailyFreeRequests
-}
+    : dailyFreeRequests;
+};
 
 export const hasFreeRequests = (ctx) => {
   return getFreeRequestsCount(ctx) > 0;
-}
+};
 
 export const removeFreeRequest = (ctx) => {
   const { freeRequestsLeft, lastUsageDate } = ctx.session;
@@ -158,7 +154,7 @@ export const removeFreeRequest = (ctx) => {
   } else if (freeRequestsLeft > 0) {
     ctx.session.freeRequestsLeft = freeRequestsLeft - 1;
   }
-}
+};
 
 export const enableUserSubscription = async (userId, months) => {
   const user = await getUser(userId);
@@ -172,8 +168,7 @@ export const enableUserSubscription = async (userId, months) => {
   await updateUser(userId, user);
 
   return user;
-}
-
+};
 
 // Modes
 
@@ -183,33 +178,32 @@ export const setBotMode = (ctx, { botMode }) => {
 
 export const getBotMode = (ctx) => {
   return ctx.session.botMode ?? defaultBotMode;
-}
-
+};
 
 // Pro mode & saved messages
 
 export const isProMode = (ctx) => {
   return Boolean(ctx.session.isPro);
-}
+};
 
 export const setProMode = (ctx, status) => {
   ctx.session.isPro = status;
-}
+};
 
 export const getSavedMessages = (ctx) => {
   if (isProMode(ctx)) {
     return ctx.session.savedMessages || [];
   }
-  
+
   return [];
-}
+};
 
 export const saveUserMessages = (ctx, messages) => {
   const savedMessages = getSavedMessages(ctx);
 
   ctx.session.savedMessages = [...savedMessages, ...messages];
-}
+};
 
 export const clearSavedMessages = (ctx) => {
   ctx.session.savedMessages = [];
-}
+};
